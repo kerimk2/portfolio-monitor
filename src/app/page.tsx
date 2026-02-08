@@ -2,8 +2,12 @@ import { supabase } from '@/lib/supabase';
 import { BDCTable } from '@/components/bdc-table';
 import { BDCSectorExposure } from '@/types';
 import { classifySector, SECTORS, Sector } from '@/lib/sector-classifier';
+import Link from 'next/link';
+import { Eye } from 'lucide-react';
 
-async function getBDCData(): Promise<BDCSectorExposure[]> {
+export const revalidate = 3600; // Revalidate at most once per hour
+
+async function getBDCData(): Promise<{ data: BDCSectorExposure[]; lastUpdated: string | null }> {
   // Get all BDCs with financial metrics
   const { data: bdcs, error: bdcError } = await supabase
     .from('bdcs')
@@ -11,8 +15,16 @@ async function getBDCData(): Promise<BDCSectorExposure[]> {
 
   if (bdcError || !bdcs) {
     console.error('Error fetching BDCs:', bdcError);
-    return [];
+    return { data: [], lastUpdated: null };
   }
+
+  // Find the most recent update timestamp across all BDCs
+  const lastUpdated = bdcs.reduce((latest: string | null, bdc: Record<string, unknown>) => {
+    const updatedAt = bdc.updated_at as string | null;
+    if (!updatedAt) return latest;
+    if (!latest) return updatedAt;
+    return updatedAt > latest ? updatedAt : latest;
+  }, null);
 
   // Get latest holdings for each BDC
   const results: BDCSectorExposure[] = [];
@@ -73,24 +85,33 @@ async function getBDCData(): Promise<BDCSectorExposure[]> {
     });
   }
 
-  return results;
+  return { data: results, lastUpdated };
 }
 
 export default async function Home() {
-  const bdcData = await getBDCData();
+  const { data: bdcData, lastUpdated } = await getBDCData();
 
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            BDC Portfolio Screener
-          </h1>
-          <p className="text-gray-600 mt-2">
-            Compare Business Development Companies by sector exposure. Click any
-            column header to sort.
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              BDC Portfolio Screener
+            </h1>
+            <p className="text-gray-600 mt-2">
+              Compare Business Development Companies by sector exposure. Click any
+              column header to sort.
+            </p>
+          </div>
+          <Link
+            href="/watchlist"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 text-sm shrink-0"
+          >
+            <Eye className="w-4 h-4" />
+            Stock Watchlist
+          </Link>
         </div>
 
         {/* Data status */}
@@ -179,15 +200,39 @@ export default async function Home() {
 
         {/* Footer */}
         <div className="mt-8 text-center text-gray-500 text-sm">
-          Data sourced from{' '}
-          <a
-            href="https://www.sec.gov/data-research/sec-markets-data/bdc-data-sets"
-            className="text-blue-600 hover:underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            SEC BDC Data Sets
-          </a>
+          {lastUpdated && (
+            <p className="mb-1">
+              Financial data last updated:{' '}
+              {new Date(lastUpdated).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                timeZoneName: 'short',
+              })}
+            </p>
+          )}
+          <p>
+            Data sourced from{' '}
+            <a
+              href="https://www.sec.gov/data-research/sec-markets-data/bdc-data-sets"
+              className="text-blue-600 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              SEC BDC Data Sets
+            </a>
+            {' & '}
+            <a
+              href="https://finance.yahoo.com"
+              className="text-blue-600 hover:underline"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Yahoo Finance
+            </a>
+          </p>
         </div>
       </div>
     </main>
