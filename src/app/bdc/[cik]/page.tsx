@@ -3,6 +3,8 @@ import { classifySector, SECTORS, Sector, getSectorColor } from '@/lib/sector-cl
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
+export const revalidate = 3600;
+
 interface Props {
   params: Promise<{ cik: string }>;
 }
